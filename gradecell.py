@@ -51,6 +51,9 @@ def check_test(test, test_ns, cell_output):
             # Remove leading/trailing whitespace, collapse all whitespace (including newlines) to single space
             return re.sub(r'\s+', ' ', s.strip())
 
+        case_sensitive = test.get("case_sensitive", False)
+        re_flags = re.DOTALL if case_sensitive else (re.DOTALL | re.IGNORECASE)
+
         if "format" in test:
             fmt = test["format"]
             expected_vars = test.get("expected", {})
@@ -62,13 +65,10 @@ def check_test(test, test_ns, cell_output):
                 if var:
                     regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+)')
             regex = regex + r'\s*$'  # Allow trailing whitespace/newline at end
-            # print(f"Format string: {fmt}", file=sys.__stdout__)
-            # print(f"Actual output: {cell_output!r}", file=sys.__stdout__)
-            # print(f"Regex used: {regex}", file=sys.__stdout__)
-            # print(f"Normalized output: {normalize(cell_output)!r}", file=sys.__stdout__)
-            match = re.match(regex, normalize(cell_output))
-            # print(f"Match result: {match}", file=sys.__stdout__)
-            assert match, f"Output did not match expected format.\nExpected format: {fmt}\nActual: {cell_output}"
+            match = re.match(regex, normalize(cell_output), flags=re_flags)
+            if not match:
+                cs_hint = "(case-sensitive)" if case_sensitive else "(case-insensitive)"
+                raise AssertionError(f"Output did not match expected format.\nExpected format {cs_hint}: {fmt}\nActual: {cell_output}")
             extracted = match.groupdict()
             # Compare extracted values to expected
             for var, expected_val in expected_vars.items():
@@ -87,9 +87,15 @@ def check_test(test, test_ns, cell_output):
                     assert str(actual_val) == str(expected_val), f"{var}: expected '{expected_val}', got '{actual_val}'"
         elif isinstance(test["expected"], list):
             for expected, actual in zip(test["expected"], cell_output if isinstance(cell_output, list) else [cell_output]):
-                assert normalize(actual) == normalize(expected), f"test for output expected {expected}, got {actual}"
+                if case_sensitive:
+                    assert normalize(actual) == normalize(expected), f"test for output expected {expected}, got {actual} (case-sensitive)"
+                else:
+                    assert normalize(actual).lower() == normalize(expected).lower(), f"test for output expected {expected}, got {actual} (case-insensitive)"
         else:
-            assert normalize(cell_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {cell_output}"
+            if case_sensitive:
+                assert normalize(cell_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {cell_output} (case-sensitive)"
+            else:
+                assert normalize(cell_output).lower() == normalize(test["expected"]).lower(), f"test for output expected {test['expected']}, got {cell_output} (case-insensitive)"
     else:
         raise ValueError("Unknown test type")
 

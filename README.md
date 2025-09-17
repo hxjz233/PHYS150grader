@@ -39,7 +39,9 @@ You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. 
 - - `variables` for the testing input variables. 
 - - `expected` contains the expected result.
 - - If `tol` exists, a tolerance is allowed for the comparison of result variables / extracted variable from output strings
-- - In `output` type, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to `expected` (and `tol`). There can be more than one variables for examination.
+- - Specifically for the `output` type:
+- - - Case sensitivity is by default `false`. This can be turned on for a particular test with `case_sensitivity=true`. It applies to both simple output test and formatted output matches.
+- - - If `format` exists, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to its value in `expected` (and `tol` if specified). There can be more than one variables for examination.
 
 ## To use:
 1. export gradebook from Canvas and placed it at the root of this grading system
@@ -54,7 +56,7 @@ You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. 
 
 ## All outputs, to sum up
 1. updated gradebook
-2. grading summary of current assignment
+2. grading summary and wrong answers of the current assignment
 3. feedback folder for grading details, and should be received as comments of the corresponding homework in the student's view
 
 ## Misc
