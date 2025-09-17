@@ -73,6 +73,8 @@ but running in Windows will not have timeout limits activated and therefore make
 If a deadloop occurs in a students code, you will have to exclude it manually.
 Running in unix environment allows a cell to run up to `timeout` secs.
 
+If a file is corrupted, it will be marked as `Unreadable Notebooks` in the grading summary and no feedback will be given
+
 ## TODO
 - allow manual operation for grading
 - approximated output

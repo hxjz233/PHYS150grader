@@ -1,2 +1,15 @@
 *.csv
-*/
+*.txt
+*.ipynb
+*.zip
+*.toml
+__pycache__/
+
+# example files of the code
+!test.csv
+!hwtest/*/*.ipynb
+!hwtest/*.toml
+
+# # but not the output files
+# hwtest/feedback
+# hwtest/*.txt
