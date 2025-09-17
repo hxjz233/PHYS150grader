@@ -44,7 +44,8 @@ You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. 
 4. run `grader.py` and expect
     1. feedback in `homework_dir/feedback_dir` which contains grading details for each students
     2. `grading_summary.txt` which contains problem numbers, avg. acc., and info about exceptions thrown for student codes.
-    3. the creation of `grade_updated.csv` at the root, which updates/appends a column according to `homework_title`
+    3. `wa.txt` which records wrong answers by the students.
+    4. the creation of `grade_updated.csv` at the root, which contains a column according to `homework_title`. Submit it to the Canvas gradebook and Canvas will hold the merging of the grades.
 5. After examining your grading outcomes, run `feedback.py` and login with duo. 
 
 ## All outputs, to sum up
