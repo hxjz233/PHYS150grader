@@ -73,6 +73,7 @@ def main():
 	user_grades = {}
 	user_grades_percentage = {}
 	unreadable_notebooks = []
+	wa_lines = []
 	for userid in userids:
 		try:
 			results, total_score, max_score = grade_notebook_for_user(userid)
@@ -102,6 +103,16 @@ def main():
 					err_type = m.group(1) if m else 'UnknownError'
 					exec_err_details.append(f"User: {userid}, Cell: {res['cell_index']}, Error: {err_type}")
 					exec_err_counts[err_type] += 1
+				# Write assertion errors (wrong answers) to wa.txt
+				if 'failed' in fail_msg.lower():
+					wa_lines.append(f"User: {userid}, Cell: {res['cell_index']}, Message: {fail_msg}")
+
+	# Write all assertion errors to wa.txt
+	if wa_lines:
+		wa_path = os.path.join(SUMMARY_DIR, "wa.txt")
+		with open(wa_path, "w", encoding="utf-8") as waf:
+			for line in wa_lines:
+				waf.write(line + "\n")
 
 	# Write summary metadata
 	meta_path = os.path.join(SUMMARY_DIR, "grading_summary.txt")
