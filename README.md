@@ -17,7 +17,7 @@ In `config.toml`,
 - `course_number` for the course id that appears in the canvas url
 - `homework_title` for the current assignment name, i.e. the gradebook header for the updated gradebook
 - `gradebook` for the file name of the gradebook downloaded from canvas. This allows the grading system to enumerate the student IDs and grade.
-- - It is recommended that you export from Canvas everytime before you grade, as there may constantly be student dropping the class and changing the student name list that you should grade
+  - It is recommended that you export from Canvas everytime before you grade, as there may constantly be student dropping the class and changing the student name list that you should grade
 - `timeout` for the timeout limit in each cell execution (in secs).
 - `debug` true for suppressing real submission of feedbacks
 - `headless` true for hiding the Chrome Explorer that automatically submits feedback
@@ -25,23 +25,29 @@ In `config.toml`,
 In `tester.toml`, which contains tests for each problem set and should be placed under the corresponding `homework_dir`,
 - `next_code_cell` for the next code cell that contains student's solution. e.g. for a hw in format
 > `Markdown`
+>
 > `Markdown`
+>
 > `Code` (initialization of variables as indicated by problem)
+>
 > `Code` (student solution)
+>
 > `Markdown`
+>
 > `Code` (initialization of variables as indicated by problem)
+>
 > `Code` (student solution)
 
 You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. The system then knows to read the 2nd and 4th `Code` block with testing variables. This way of denoting solution cell numbers in `tester.toml` enables a more flexible way to stack the problems and is expected to give extra flexibility when moving the problems around in their order/across different assignments.
 - `pts` points assigned to this problem. The student would get passed proportion of points out of all tests for that problem
 - `line_offset` for the number of ignored lines within cell when reading student solution. This is useful when the lines for the initialization of problem variables are written with student solution within the same cell. There you would want to skip reassigning variables to default nubmers and read only from the lines where the student solution is at.
 - `tests` for the tests. `type` accepts `variable` or `output` for distinguishing whether the system should look at specific variable or at the standard output. 
-- - `variables` for the testing input variables. 
-- - `expected` contains the expected result.
-- - If `tol` exists, a tolerance is allowed for the comparison of result variables / extracted variable from output strings
-- - Specifically for the `output` type:
-- - - Case sensitivity is by default `false`. This can be turned on for a particular test with `case_sensitivity=true`. It applies to both simple output test and formatted output matches.
-- - - If `format` exists, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to its value in `expected` (and `tol` if specified). There can be more than one variables for examination.
+  - `variables` for the testing input variables. 
+  - `expected` contains the expected result.
+  - If `tol` exists, a tolerance is allowed for the comparison of result variables / extracted variable from output strings
+  - Specifically for the `output` type:
+    - Case sensitivity is by default `false`. This can be turned on for a particular test with `case_sensitivity=true`. It applies to both simple output test and formatted output matches.
+    - If `format` exists, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to its value in `expected` (and `tol` if specified). There can be more than one variables for examination.
 
 ## To use:
 1. export gradebook from Canvas and placed it at the root of this grading system
