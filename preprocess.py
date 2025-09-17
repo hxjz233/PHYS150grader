@@ -9,7 +9,7 @@ submissions_dir = config.get("submissions_dir", "submissions")
 
 zip_path = os.path.join(homework_dir, "submissions.zip")
 output_dir = os.path.join(homework_dir, submissions_dir)
-os.makedirs(homework_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
 with zipfile.ZipFile(zip_path, 'r') as zipf:
     for name in zipf.namelist():
