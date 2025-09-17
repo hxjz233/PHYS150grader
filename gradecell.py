@@ -2,6 +2,8 @@ import nbformat
 import toml
 import sys
 import os
+import io
+from contextlib import redirect_stdout
 from types import SimpleNamespace
 import platform
 
@@ -43,11 +45,48 @@ def check_test(test, test_ns, cell_output):
             else:
                 assert actual == expected, f"test for {var} expected {expected}, got {actual}"
     elif test["type"] == "output":
-        if isinstance(test["expected"], list):
+        import re
+        from string import Formatter
+        def normalize(s):
+            # Remove leading/trailing whitespace, collapse all whitespace (including newlines) to single space
+            return re.sub(r'\s+', ' ', s.strip())
+
+        if "format" in test:
+            fmt = test["format"]
+            expected_vars = test.get("expected", {})
+            tol = test.get("tol", None)
+            # Build regex from format string
+            regex = re.escape(fmt)
+            # Replace {var} with regex group
+            for _, var, _, _ in Formatter().parse(fmt):
+                if var:
+                    regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+?)')
+            # Allow flexible whitespace
+            regex = regex.replace(r'\ ', r'\\s+')
+            # Match
+            match = re.match(regex, normalize(cell_output))
+            assert match, f"Output did not match expected format.\nExpected format: {fmt}\nActual: {cell_output}"
+            extracted = match.groupdict()
+            # Compare extracted values to expected
+            for var, expected_val in expected_vars.items():
+                actual_val = extracted.get(var, None)
+                assert actual_val is not None, f"Variable {var} not found in output."
+                # Try to compare as float if both are numeric
+                try:
+                    expected_num = float(expected_val)
+                    actual_num = float(actual_val)
+                    if tol is not None:
+                        assert abs(actual_num - expected_num) <= tol, f"{var}: expected {expected_num} (tol={tol}), got {actual_num}"
+                    else:
+                        assert actual_num == expected_num, f"{var}: expected {expected_num}, got {actual_num}"
+                except Exception:
+                    # Fallback to string comparison
+                    assert str(actual_val) == str(expected_val), f"{var}: expected '{expected_val}', got '{actual_val}'"
+        elif isinstance(test["expected"], list):
             for expected, actual in zip(test["expected"], cell_output if isinstance(cell_output, list) else [cell_output]):
-                assert actual == expected, f"test for {var} expected Output {expected}, got {actual}"
+                assert normalize(actual) == normalize(expected), f"test for output expected {expected}, got {actual}"
         else:
-            assert cell_output == test["expected"], f"test for {var} expected Output {test['expected']}, got {cell_output}"
+            assert normalize(cell_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {cell_output}"
     else:
         raise ValueError("Unknown test type")
 
@@ -94,22 +133,19 @@ def grade_notebook(nb=None):
                     failed_tests.append(f"Test {test_num} blocked on input ({input_str}): {reason}")
                     safety_violation_count += 1
                     continue
-                old_stdout = sys.stdout
-                sys.stdout = temp_stdout = type('', (), {'write': lambda self, x: setattr(self, 'out', x)})()
+                f = io.StringIO()
                 try:
-                    try:
+                    with redirect_stdout(f):
                         cell_result = run_cell(code_to_run, test_ns)
-                        if cell_result == "__DEADLOOP__":
-                            failed_tests.append(f"Test {test_num} timeout on input ({input_str})")
-                            timeout_violation_count += 1
-                            continue
-                        cell_output = getattr(temp_stdout, 'out', None)
-                    except Exception as exec_err:
-                        err_type = type(exec_err).__name__
-                        failed_tests.append(f"Test {test_num} error ({err_type}) on input ({input_str}): {exec_err}")
+                    if cell_result == "__DEADLOOP__":
+                        failed_tests.append(f"Test {test_num} timeout on input ({input_str})")
+                        timeout_violation_count += 1
                         continue
-                finally:
-                    sys.stdout = old_stdout
+                    cell_output = f.getvalue()
+                except Exception as exec_err:
+                    err_type = type(exec_err).__name__
+                    failed_tests.append(f"Test {test_num} error ({err_type}) on input ({input_str}): {exec_err}")
+                    continue
                 try:
                     check_test(test, test_ns, cell_output)
                     passed += 1
