@@ -60,11 +60,14 @@ def check_test(test, test_ns, cell_output):
             # Replace {var} with regex group
             for _, var, _, _ in Formatter().parse(fmt):
                 if var:
-                    regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+?)')
-            # Allow flexible whitespace
-            regex = regex.replace(r'\ ', r'\\s+')
-            # Match
+                    regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+)')
+            regex = regex + r'\s*$'  # Allow trailing whitespace/newline at end
+            # print(f"Format string: {fmt}", file=sys.__stdout__)
+            # print(f"Actual output: {cell_output!r}", file=sys.__stdout__)
+            # print(f"Regex used: {regex}", file=sys.__stdout__)
+            # print(f"Normalized output: {normalize(cell_output)!r}", file=sys.__stdout__)
             match = re.match(regex, normalize(cell_output))
+            # print(f"Match result: {match}", file=sys.__stdout__)
             assert match, f"Output did not match expected format.\nExpected format: {fmt}\nActual: {cell_output}"
             extracted = match.groupdict()
             # Compare extracted values to expected
