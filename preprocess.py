@@ -16,7 +16,11 @@ with zipfile.ZipFile(zip_path, 'r') as zipf:
         if name.endswith('.ipynb'):
             # Extract user_id between 2nd and 3rd underscore
             parts = name.split('_')
-            user_id = parts[1] if len(parts) > 2 else parts[1] if len(parts) > 1 else ""
+            user_id = ""
+            if parts[1] == "LATE":
+                user_id = parts[2]
+            else:
+                user_id = parts[1]
             new_name = f"{user_id}.ipynb"
             data = zipf.read(name)
             with open(os.path.join(output_dir, new_name), 'wb') as f:
