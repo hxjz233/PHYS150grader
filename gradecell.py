@@ -29,9 +29,19 @@ tester = get_tester_toml()
 
 def check_test(test, test_ns, cell_output):
     if test["type"] == "variable":
+        tol = test.get("tol", None)
         for var, expected in test["expected"].items():
             actual = test_ns.__dict__.get(var, None)
-            assert actual == expected, f"test for {var} expected {expected}, got {actual}"
+            if tol is not None:
+                # Try to compare as floats with tolerance
+                try:
+                    if not (isinstance(actual, (int, float)) and isinstance(expected, (int, float))):
+                        raise AssertionError(f"test for {var} expected {expected}, got {actual} (non-numeric, cannot use tol)")
+                    assert abs(actual - expected) <= tol, f"test for {var} expected {expected} (tol={tol}), got {actual}"
+                except Exception as e:
+                    raise AssertionError(str(e))
+            else:
+                assert actual == expected, f"test for {var} expected {expected}, got {actual}"
     elif test["type"] == "output":
         if isinstance(test["expected"], list):
             for expected, actual in zip(test["expected"], cell_output if isinstance(cell_output, list) else [cell_output]):
