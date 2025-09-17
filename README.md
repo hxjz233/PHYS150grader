@@ -35,7 +35,11 @@ In `tester.toml`, which contains tests for each problem set and should be placed
 You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. The system then knows to read the 2nd and 4th `Code` block with testing variables. This way of denoting solution cell numbers in `tester.toml` enables a more flexible way to stack the problems and is expected to give extra flexibility when moving the problems around in their order/across different assignments.
 - `pts` points assigned to this problem. The student would get passed proportion of points out of all tests for that problem
 - `line_offset` for the number of ignored lines within cell when reading student solution. This is useful when the lines for the initialization of problem variables are written with student solution within the same cell. There you would want to skip reassigning variables to default nubmers and read only from the lines where the student solution is at.
-- `tests` for the tests. `type` accepts `variable` or `output` for distinguishing whether the system should look at specific variable or at the standard output. `variables` for the testing variables. `expected` contains the expected result.
+- `tests` for the tests. `type` accepts `variable` or `output` for distinguishing whether the system should look at specific variable or at the standard output. 
+- - `variables` for the testing input variables. 
+- - `expected` contains the expected result.
+- - If `tol` exists, a tolerance is allowed for the comparison of result variables / extracted variable from output strings
+- - In `output` type, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to `expected` (and `tol`). There can be more than one variables for examination.
 
 ## To use:
 1. export gradebook from Canvas and placed it at the root of this grading system
