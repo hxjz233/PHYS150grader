@@ -58,7 +58,7 @@ def grade_notebook(nb=None):
     total_score = 0
     max_score = 0
     current_code_cell_index = 0
-    for problem in tester["problems"]:
+    for problem in tester["problem"]:
         current_code_cell_index += problem["next_code_cell"]
         pts = problem.get("pts", 1)
         tests = problem["tests"]

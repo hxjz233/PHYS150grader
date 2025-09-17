@@ -3,7 +3,7 @@ course_number = "395676"
 
 # Assignment specific settings
 homework_dir = "hw2"
-gradebook = "2025-09-11T1927_Grades-PHYS_150_500_.csv"
+gradebook = "2025-09-17T1343_Grades-PHYS_150_500_.csv"
 homework_title = "Assignment 2"
 
 # subdirectory settings
