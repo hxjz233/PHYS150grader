@@ -20,6 +20,9 @@ GRADEBOOK = config.get("gradebook", "grade.csv")
 SUMMARY_DIR = HOMEWORK_DIR
 FEEDBACK_DIR = os.path.join(HOMEWORK_DIR, config.get("feedback_dir", "feedback"))
 
+# Explicitly define the first 4 column headers
+HEADERS = ["Student", "ID", "SIS Login ID", "Section"]
+
 def get_userids_from_csv(csv_path):
 	userids = []
 	with open(csv_path, newline='', encoding='utf-8') as f:
@@ -160,11 +163,25 @@ def main():
 		id_val = row[header.index("ID")].strip() if "ID" in header else ""
 		if id_val in user_grades:
 			row[col_idx] = f"{user_grades[id_val]:.2f}"
-	# Write to new file
+	# Find their indices in the header row
+	ID_indices = [header.index(h) for h in HEADERS]
+	grade_col_idx = col_idx
+	# Avoid duplicate if grade_col_idx is within first 4
+	output_indices = ID_indices.copy()
+	if grade_col_idx not in output_indices:
+		output_indices.append(grade_col_idx)
+	# Prepare filtered rows
+	filtered_rows = []
+	for row in [header] + rows[1:]:
+		# Pad row if needed
+		if len(row) < len(header):
+			row += [""] * (len(header) - len(row))
+		filtered_rows.append([row[i] for i in output_indices])
+	# Define output path before writing
 	out_path = os.path.join(os.path.dirname(__file__), "grade_updated.csv")
 	with open(out_path, "w", newline='', encoding='utf-8') as f:
 		writer = csv.writer(f)
-		writer.writerows([header] + rows[1:])
+		writer.writerows(filtered_rows)
 
 if __name__ == "__main__":
 	main()
