@@ -62,7 +62,7 @@ def write_user_grade_txt(userid, results, total_score, max_score):
 			f.write(f"Total Score: {total_score:.2f}/{max_score}\n")
 
 def main():
-	userids = get_userids_from_csv(GRADEBOOK)
+	userids = sorted(get_userids_from_csv(GRADEBOOK), key=lambda x: int(x) if x.isdigit() else x)
 	summary_scores = defaultdict(list)
 	safety_violations = defaultdict(int)
 	timeout_violations = defaultdict(int)

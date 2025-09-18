@@ -2,12 +2,12 @@
 course_number = "395676"
 
 # Assignment specific settings
-# homework_dir = "hw2"
-# gradebook = "2025-09-17T1343_Grades-PHYS_150_500_.csv"
-# homework_title = "Assignment 2"
-homework_dir = "hwtest"
-gradebook = "test.csv"
-homework_title = "hwtest"
+homework_dir = "hw2"
+gradebook = "2025-09-17T1343_Grades-PHYS_150_500_.csv"
+homework_title = "Assignment 2"
+# homework_dir = "hwtest"
+# gradebook = "test.csv"
+# homework_title = "hwtest"
 
 # subdirectory settings
 submissions_dir = "submissions"
