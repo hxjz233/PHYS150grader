@@ -116,7 +116,8 @@ def grade_notebook(nb=None):
     total_score = 0
     max_score = 0
     current_code_cell_index = 0
-    for problem in tester["problem"]:
+    test_results = {}  # key: prob#_test#, value: (1/0, failmsg)
+    for prob_idx, problem in enumerate(tester["problem"], 1):
         current_code_cell_index += problem["next_code_cell"]
         pts = problem.get("pts", 1)
         tests = problem["tests"]
@@ -126,40 +127,50 @@ def grade_notebook(nb=None):
         failed_tests = []
         safety_violation_count = 0
         timeout_violation_count = 0
-        for test_num, test in enumerate(tests, 1):
+        for test_idx, test in enumerate(tests, 1):
             test_ns = SimpleNamespace()
             test_inputs = test.get("variables", {})
             for var, val in test_inputs.items():
                 setattr(test_ns, var, val)
+            key = f"prob{prob_idx}_test{test_idx}"
             if cell.cell_type == "code":
-                # Only execute code after line_offset
+                # Remove all blank lines first
                 cell_lines = cell.source.splitlines() if isinstance(cell.source, str) else cell.source
-                code_to_run = "\n".join(cell_lines[line_offset:])
+                non_blank_lines = [line for line in cell_lines if line.strip() != ""]
+                # Only execute code after line_offset
+                code_to_run = "\n".join(non_blank_lines[line_offset:])
                 # Check code safety before running
                 safe, reason = is_code_safe(code_to_run)
                 input_str = ', '.join([f'{k}={v}' for k, v in test_inputs.items()])
                 if not safe:
-                    failed_tests.append(f"Test {test_num} blocked on input ({input_str}): {reason}")
+                    failed_tests.append(f"Test {test_idx} blocked on input ({input_str}): {reason}")
                     safety_violation_count += 1
+                    test_results[key] = (0, f"Blocked: {reason}")
                     continue
                 f = io.StringIO()
                 try:
                     with redirect_stdout(f):
                         cell_result = run_cell(code_to_run, test_ns)
                     if cell_result == "__DEADLOOP__":
-                        failed_tests.append(f"Test {test_num} timeout on input ({input_str})")
+                        failed_tests.append(f"Test {test_idx} timeout on input ({input_str})")
                         timeout_violation_count += 1
+                        test_results[key] = (0, "Timeout")
                         continue
                     cell_output = f.getvalue()
                 except Exception as exec_err:
                     err_type = type(exec_err).__name__
-                    failed_tests.append(f"Test {test_num} error ({err_type}) on input ({input_str}): {exec_err}")
+                    failmsg = f"Test {test_idx} error ({err_type}) on input ({input_str}): {exec_err}"
+                    failed_tests.append(failmsg)
+                    test_results[key] = (0, failmsg)
                     continue
                 try:
                     check_test(test, test_ns, cell_output)
                     passed += 1
+                    test_results[key] = (1, "")
                 except AssertionError as e:
-                    failed_tests.append(f"Test {test_num} failed on input ({input_str}): {e}")
+                    failmsg = f"Test {test_idx} failed on input ({input_str}): {e}"
+                    failed_tests.append(failmsg)
+                    test_results[key] = (0, failmsg)
         percent = passed / len(tests) if tests else 0
         score = percent * pts
         total_score += score
@@ -174,7 +185,7 @@ def grade_notebook(nb=None):
             "safety_violations": safety_violation_count,
             "timeout_violations": timeout_violation_count
         })
-    return results, total_score, max_score
+    return results, total_score, max_score, test_results
 
 if __name__ == "__main__":
     print("This module is intended to be imported and used by grader.py.")

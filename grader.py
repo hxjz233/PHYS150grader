@@ -37,10 +37,10 @@ def grade_notebook_for_user(userid):
 	nb_path = os.path.join(SUBMISSIONS_DIR, f"{userid}.ipynb")
 	print(f"Grading notebook for user {userid} at {nb_path}")
 	if not os.path.exists(nb_path):
-		return None, None, None
+		return None, None, None, None
 	nb = nbformat.read(open(nb_path, encoding="utf-8"), as_version=4)
-	results, total_score, max_score = gradecell.grade_notebook(nb)
-	return results, total_score, max_score
+	results, total_score, max_score, test_results = gradecell.grade_notebook(nb)
+	return results, total_score, max_score, test_results
 
 def write_user_grade_txt(userid, results, total_score, max_score):
 	txt_path = os.path.join(FEEDBACK_DIR, f"{userid}.txt")
@@ -74,17 +74,39 @@ def main():
 	user_grades_percentage = {}
 	unreadable_notebooks = []
 	wa_lines = []
+	# --- Collect all test keys for header ---
+	import gradecell
+	tester = gradecell.tester
+	test_keys = []
+	for prob_idx, problem in enumerate(tester["problem"], 1):
+		for test_idx, _ in enumerate(problem["tests"], 1):
+			test_keys.append(f"prob{prob_idx}_test{test_idx}")
+
+	passfail_rows = []
+	msg_rows = []
+	userids_done = []
 	for userid in userids:
 		try:
-			results, total_score, max_score = grade_notebook_for_user(userid)
-		except Exception:
-			results, total_score, max_score = None, None, None
-		if results is None:
+			results, total_score, max_score, test_results = grade_notebook_for_user(userid)
+		except Exception as e:
+			print(f"Error grading notebook for user {userid}: {e}")
+			results, total_score, max_score, test_results = None, None, None, None
+		if results is None or test_results is None:
 			unreadable_notebooks.append(userid)
 			continue
 		write_user_grade_txt(userid, results, total_score, max_score)
 		user_grades[userid] = total_score if max_score else 0 if max_score else None
 		user_grades_percentage[userid] = total_score / max_score * 100 if max_score else 0 if max_score else None
+		# Build row for pass/fail and message
+		pf_row = [userid]
+		msg_row = [userid]
+		for key in test_keys:
+			pf_row.append(test_results[key][0])
+			msg_row.append(test_results[key][1])
+		passfail_rows.append(pf_row)
+		msg_rows.append(msg_row)
+		userids_done.append(userid)
+		# --- Existing summary logic ---
 		for i, res in enumerate(results):
 			percent = res['passed'] / res['total'] if res['total'] else 0
 			summary_scores[i].append(percent)
@@ -94,18 +116,29 @@ def main():
 				safety_violation_details.append(f"User: {userid}, Cell: {res['cell_index']}")
 			if res.get('timeout_violations', 0) > 0:
 				timeout_violation_details.append(f"User: {userid}, Cell: {res['cell_index']}")
-			# Record exec errors from failed_tests
 			for fail_msg in res.get('failed_tests', []):
 				if 'error (' in fail_msg:
-					# Example: 'Test 1 error (TypeError) on input (x=1): ...'
 					import re
 					m = re.search(r'error \(([^)]+)\)', fail_msg)
 					err_type = m.group(1) if m else 'UnknownError'
 					exec_err_details.append(f"User: {userid}, Cell: {res['cell_index']}, Error: {err_type}")
 					exec_err_counts[err_type] += 1
-				# Write assertion errors (wrong answers) to wa.txt
 				if 'failed' in fail_msg.lower():
 					wa_lines.append(f"User: {userid}, Cell: {res['cell_index']}, Message: {fail_msg}")
+
+	# Write pass/fail and message CSVs
+	pf_header = ["ID"] + test_keys
+	msg_header = ["ID"] + test_keys
+	pf_path = os.path.join(SUMMARY_DIR, "test_passfail.csv")
+	msg_path = os.path.join(SUMMARY_DIR, "test_failmsg.csv")
+	with open(pf_path, "w", newline='', encoding='utf-8') as f:
+		writer = csv.writer(f)
+		writer.writerow(pf_header)
+		writer.writerows(passfail_rows)
+	with open(msg_path, "w", newline='', encoding='utf-8') as f:
+		writer = csv.writer(f)
+		writer.writerow(msg_header)
+		writer.writerows(msg_rows)
 
 	# Write all assertion errors to wa.txt
 	if wa_lines:
