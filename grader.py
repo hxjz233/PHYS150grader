@@ -61,6 +61,14 @@ def write_user_grade_txt(userid, results, total_score, max_score):
 		else:
 			f.write(f"Total Score: {total_score:.2f}/{max_score}\n")
 
+def write_user_mismatch_txt(userid, expected, got):
+	txt_path = os.path.join(FEEDBACK_DIR, f"{userid}.txt")
+	os.makedirs(FEEDBACK_DIR, exist_ok=True)
+	with open(txt_path, "w", encoding="utf-8") as f:
+		f.write(f"Cell count mismatch for user {userid}:\n")
+		f.write(f"Expected code cells: {expected}\n")
+		f.write(f"Actual code cells: {got}\n")
+
 def main():
 	userids = sorted(get_userids_from_csv(GRADEBOOK), key=lambda x: int(x) if x.isdigit() else x)
 	summary_scores = defaultdict(list)
@@ -73,6 +81,7 @@ def main():
 	user_grades = {}
 	user_grades_percentage = {}
 	unreadable_notebooks = []
+	cell_mismatch_users = []
 	wa_lines = []
 	# --- Collect all test keys for header ---
 	import gradecell
@@ -91,6 +100,12 @@ def main():
 		except Exception as e:
 			print(f"Error grading notebook for user {userid}: {e}")
 			results, total_score, max_score, test_results = None, None, None, None
+
+		if results == "CELL_MISMATCH":
+			[expected, got] = test_results.values()
+			write_user_mismatch_txt(userid, expected, got)
+			cell_mismatch_users.append(f"User: {userid}, Expected: {expected}, Got: {got}")
+			continue
 		if results is None or test_results is None:
 			unreadable_notebooks.append(userid)
 			continue
@@ -179,6 +194,10 @@ def main():
 			f.write("\nUnreadable Notebooks (User IDs):\n")
 			for uid in unreadable_notebooks:
 				f.write(f"{uid}\n")
+		if cell_mismatch_users:
+			f.write("\nCell Count Mismatch (User IDs):\n")
+			for detail in cell_mismatch_users:
+				f.write(f"{detail}\n")
 
 	# Add grade column to gradebook with config.toml homework_title
 	homework_title = config.get("homework_title", "New Assignment")
@@ -192,7 +211,7 @@ def main():
 			points_row_idx = idx
 			break
 	# Get max_score from gradecell
-	_, _, max_score = gradecell.grade_notebook()
+	_, _, max_score, _ = gradecell.grade_notebook()
 	# Find column index matching homework_title prefix
 	col_idx = None
 	for i, col in enumerate(header):

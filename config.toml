@@ -10,8 +10,8 @@ homework_title = "Assignment 2"
 # homework_title = "hwtest"
 
 # subdirectory settings
-submissions_dir = "submissions"
-feedback_dir = "feedback"
+submissions_dir = "submissionsnfeedback"
+feedback_dir = "submissionsnfeedback"
 
 # safeguard settings
 timeout = 3

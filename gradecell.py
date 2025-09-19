@@ -110,8 +110,17 @@ def get_code_cell_by_accumulated_index(nb, target_index):
 
 def grade_notebook(nb=None):
     if nb is None:
-        return None, None, None
-        # raise ValueError("No notebook provided for grading.")
+        # This case is for when grade_notebook is called to get max_score without a notebook
+        max_score = sum(p.get("pts", 1) for p in tester["problem"])
+        return None, None, max_score, None
+
+    # --- Cell count check ---
+    expected_code_cells = sum(p.get('next_code_cell', 0) for p in tester['problem'])
+    actual_code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
+    if actual_code_cells != expected_code_cells:
+        test_results = {"expected": expected_code_cells, "got": actual_code_cells}
+        return "CELL_MISMATCH", None, None, test_results
+
     results = []
     total_score = 0
     max_score = 0
