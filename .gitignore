@@ -3,6 +3,7 @@
 *.ipynb
 *.zip
 *.toml
+hwsuggestions.md
 __pycache__/
 
 # example files of the code

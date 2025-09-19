@@ -131,6 +131,12 @@ def main():
 	msg_header = ["ID"] + test_keys
 	pf_path = os.path.join(SUMMARY_DIR, "test_passfail.csv")
 	msg_path = os.path.join(SUMMARY_DIR, "test_failmsg.csv")
+
+	if os.path.exists(pf_path):
+		os.rename(pf_path, os.path.join(SUMMARY_DIR, "test_passfail_bkup.csv"))
+	if os.path.exists(msg_path):
+		os.rename(msg_path, os.path.join(SUMMARY_DIR, "test_failmsg_bkup.csv"))
+
 	with open(pf_path, "w", newline='', encoding='utf-8') as f:
 		writer = csv.writer(f)
 		writer.writerow(pf_header)

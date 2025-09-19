@@ -12,7 +12,7 @@ if platform.system() == "Linux" or platform.system() == "Darwin":
     from safecode_unix import run_cell
 else:
     from safecode import run_cell
-from safecode import is_code_safe
+from safecode import is_code_safe, remove_input_lines
 
 # Load tester.toml from homework directory if specified
 def get_tester_toml():
@@ -139,6 +139,9 @@ def grade_notebook(nb=None):
                 non_blank_lines = [line for line in cell_lines if line.strip() != ""]
                 # Only execute code after line_offset
                 code_to_run = "\n".join(non_blank_lines[line_offset:])
+                # If test has inputs, we shouldn't be using student's input() calls
+                if test_inputs:
+                    code_to_run = remove_input_lines(code_to_run)
                 # Check code safety before running
                 safe, reason = is_code_safe(code_to_run)
                 input_str = ', '.join([f'{k}={v}' for k, v in test_inputs.items()])
