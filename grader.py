@@ -1,4 +1,3 @@
-
 import csv
 import os
 import nbformat
@@ -141,6 +140,9 @@ def main():
 				if 'failed' in fail_msg.lower():
 					wa_lines.append(f"User: {userid}, Cell: {res['cell_index']}, Message: {fail_msg}")
 
+	# Get max_score from gradecell
+	_, _, max_score, _ = gradecell.grade_notebook()
+	
 	# Write pass/fail and message CSVs
 	pf_header = ["ID"] + test_keys
 	msg_header = ["ID"] + test_keys
@@ -175,6 +177,14 @@ def main():
 		for i in sorted(summary_scores.keys()):
 			avg_pct = sum(summary_scores[i]) / len(summary_scores[i]) if summary_scores[i] else 0
 			f.write(f"{i},{avg_pct:.2%},{safety_violations[i]},{timeout_violations[i]}\n")
+		# --- Calculate and write average total score ---
+		valid_scores = [score for score in user_grades.values() if score is not None]
+		if valid_scores:
+			avg_total_score = sum(valid_scores) / len(valid_scores)
+			# Assuming max_score is consistent across all users, get it from the last valid run
+			if max_score is not None:
+				f.write(f"\nAverage Total Score: {avg_total_score:.2f}/{max_score}\n")
+		# -----------------------------------------
 		if safety_violation_details:
 			f.write("\nSafety Violations (User, Cell):\n")
 			for detail in safety_violation_details:
@@ -195,7 +205,7 @@ def main():
 			for uid in unreadable_notebooks:
 				f.write(f"{uid}\n")
 		if cell_mismatch_users:
-			f.write("\nCell Count Mismatch (User IDs):\n")
+			f.write("\nCell Count Mismatch (User, Expected, Got):\n")
 			for detail in cell_mismatch_users:
 				f.write(f"{detail}\n")
 
@@ -210,8 +220,6 @@ def main():
 		if any("Points Possible" in cell for cell in row):
 			points_row_idx = idx
 			break
-	# Get max_score from gradecell
-	_, _, max_score, _ = gradecell.grade_notebook()
 	# Find column index matching homework_title prefix
 	col_idx = None
 	for i, col in enumerate(header):
