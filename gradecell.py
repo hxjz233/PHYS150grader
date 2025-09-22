@@ -29,17 +29,25 @@ def get_tester_toml():
 
 tester = get_tester_toml()
 
+def _to_complex_if_needed(val):
+    """Converts a dict with 'real' and 'imag' keys to a complex number."""
+    if isinstance(val, dict) and 'real' in val and 'imag' in val:
+        return complex(val['real'], val['imag'])
+    return val
+
 def check_test(test, test_ns, cell_output):
     if test["type"] == "variable":
         tol = test.get("tol", None)
         for var, expected in test["expected"].items():
+            expected = _to_complex_if_needed(expected)  # Convert expected value
             actual = test_ns.__dict__.get(var, None)
             if tol is not None:
-                # Try to compare as floats with tolerance
+                # Try to compare as floats/complex with tolerance
                 try:
-                    if not (isinstance(actual, (int, float)) and isinstance(expected, (int, float))):
+                    if isinstance(actual, (int, float, complex)) and isinstance(expected, (int, float, complex)):
+                        assert abs(actual - expected) <= tol, f"test for {var} expected {expected} (tol={tol}), got {actual}"
+                    else:
                         raise AssertionError(f"test for {var} expected {expected}, got {actual} (non-numeric, cannot use tol)")
-                    assert abs(actual - expected) <= tol, f"test for {var} expected {expected} (tol={tol}), got {actual}"
                 except Exception as e:
                     raise AssertionError(str(e))
             else:
@@ -140,6 +148,7 @@ def grade_notebook(nb=None):
             test_ns = SimpleNamespace()
             test_inputs = test.get("variables", {})
             for var, val in test_inputs.items():
+                val = _to_complex_if_needed(val)  # Convert input variable
                 setattr(test_ns, var, val)
             key = f"prob{prob_idx}_test{test_idx}"
             if cell.cell_type == "code":
