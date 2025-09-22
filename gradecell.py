@@ -150,6 +150,18 @@ def grade_notebook(nb=None):
             for var, val in test_inputs.items():
                 val = _to_complex_if_needed(val)  # Convert input variable
                 setattr(test_ns, var, val)
+
+            # --- New logic for input mocking ---
+            input_overload_val = test.get("input_overload", None)
+            if input_overload_val is not None:
+                def mock_input(prompt=""):
+                    # Mimic the real input() by printing the prompt to stdout
+                    # print(prompt, end="")
+                    return input_overload_val
+                # Inject the mock into the execution namespace
+                test_ns.input = mock_input
+            # ------------------------------------
+
             key = f"prob{prob_idx}_test{test_idx}"
             if cell.cell_type == "code":
                 # Remove all blank lines first
@@ -157,12 +169,29 @@ def grade_notebook(nb=None):
                 non_blank_lines = [line for line in cell_lines if line.strip() != ""]
                 # Only execute code after line_offset
                 code_to_run = "\n".join(non_blank_lines[line_offset:])
-                # If test has inputs, we shouldn't be using student's input() calls
-                if test_inputs:
+
+                # If test has inputs OR we are overloading input, we shouldn't be using student's input() calls
+                # But if we are overloading, we need the line with input() to be there.
+                if test_inputs and input_overload_val is None:
                     code_to_run = remove_input_lines(code_to_run)
+
                 # Check code safety before running
                 safe, reason = is_code_safe(code_to_run)
-                input_str = ', '.join([f'{k}={v}' for k, v in test_inputs.items()])
+
+                # --- Build input_str with proper complex formatting ---
+                formatted_inputs = []
+                for k, v in test_inputs.items():
+                    converted_v = _to_complex_if_needed(v)
+                    formatted_inputs.append(f'{k}={converted_v}')
+                input_str = ', '.join(formatted_inputs)
+                # ----------------------------------------------------
+
+                if input_overload_val is not None:
+                    if input_str:
+                        input_str += f", all inputs be {repr(input_overload_val)}"
+                    else:
+                        input_str = f"all inputs be {repr(input_overload_val)}"
+
                 if not safe:
                     failed_tests.append(f"Test {test_idx} blocked on input ({input_str}): {reason}")
                     safety_violation_count += 1
