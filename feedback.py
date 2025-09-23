@@ -130,16 +130,33 @@ if __name__ == "__main__":
     chrome_options.add_argument("--remote-debugging-port=9222")
 
     driver = webdriver.Chrome(options=chrome_options)
-    for fname in os.listdir(feedback_dir):
-        if not fname.endswith('.txt'):
-            continue
-        student_id = os.path.splitext(fname)[0]
-        feedback_path = os.path.join(feedback_dir, fname)
-        canvas_url = f"https://canvas.tamu.edu/courses/{course_number}/gradebook/speed_grader?assignment_id={assignment_id}&student_id={student_id}"
-        print(f"Navigating to {canvas_url}")
-        driver.get(canvas_url)
-        # Login only once, on first student
-        if fname == sorted(os.listdir(feedback_dir))[0]:
-            driver = login_to_canvas(driver)
-        upload_feedback(driver, feedback_path)
+
+    # Filter for .txt files and sort them once
+    feedback_files = sorted([f for f in os.listdir(feedback_dir) if f.endswith('.txt')])
+
+    if not feedback_files:
+        print(f"No .txt files found in {feedback_dir}")
+    else:
+        # Login once before processing all students
+        first_file = feedback_files[0]
+        first_student_id = os.path.splitext(first_file)[0]
+        login_url = f"https://canvas.tamu.edu/courses/{course_number}/gradebook/speed_grader?assignment_id={assignment_id}&student_id={first_student_id}"
+        print(f"Navigating to initial page for login: {login_url}")
+        driver.get(login_url)
+        driver = login_to_canvas(driver)
+        
+        # Now process the first student's feedback since we are already on their page
+        print(f"Uploading feedback for first student: {first_student_id}")
+        first_feedback_path = os.path.join(feedback_dir, first_file)
+        upload_feedback(driver, first_feedback_path)
+
+        # Process the rest of the students
+        for fname in feedback_files[1:]:
+            student_id = os.path.splitext(fname)[0]
+            feedback_path = os.path.join(feedback_dir, fname)
+            canvas_url = f"https://canvas.tamu.edu/courses/{course_number}/gradebook/speed_grader?assignment_id={assignment_id}&student_id={student_id}"
+            print(f"Navigating to {canvas_url}")
+            driver.get(canvas_url)
+            upload_feedback(driver, feedback_path)
+
     driver.quit()  # Close browser when done

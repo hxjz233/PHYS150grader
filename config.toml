@@ -17,5 +17,5 @@ feedback_dir = "submissionsnfeedback"
 timeout = 3
 
 # feedback submission settings
-debug = true
+debug = false
 headless = false
