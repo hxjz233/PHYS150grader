@@ -12,7 +12,7 @@ if platform.system() == "Linux" or platform.system() == "Darwin":
     from safecode_unix import run_cell
 else:
     from safecode import run_cell
-from safecode import is_code_safe, remove_input_lines
+from safecode import is_code_safe, remove_input_lines, sanitize_student_code
 
 # Load tester.toml from homework directory if specified
 def get_tester_toml():
@@ -174,6 +174,9 @@ def grade_notebook(nb=None):
                 # But if we are overloading, we need the line with input() to be there.
                 if test_inputs and input_overload_val is None:
                     code_to_run = remove_input_lines(code_to_run)
+
+                # Sanitize student code to remove disruptive calls
+                code_to_run = sanitize_student_code(code_to_run)
 
                 # Check code safety before running
                 safe, reason = is_code_safe(code_to_run)

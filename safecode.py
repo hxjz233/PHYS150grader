@@ -53,7 +53,8 @@ def run_cell(cell_code, test_ns):
 
 def is_code_safe(cell_code):
     banned_imports = ["os", "sys", "subprocess", "socket", "shutil", "pathlib", "requests", "multiprocessing", "threading", "ctypes", "pickle"]
-    banned_patterns = ["open(", "eval(", "exec(", "__import__", "compile(", "globals(", "locals(", "setattr(", "delattr(", "getattr(", "exit(", "quit(", "system(", "fork(", "kill(", "remove(", "rmdir(", "unlink(", "chmod(", "chown(", "popen(", "walk(", "makedirs(", "mkdir(", "rmtree(", "copy(", "move(", "rename(", "socket.", "threading.", "multiprocessing."]
+    # The most disruptive calls (input, exit, quit) are now handled by sanitize_student_code
+    banned_patterns = ["open(", "eval(", "exec(", "__import__", "compile(", "globals(", "locals(", "setattr(", "delattr(", "getattr(", "system(", "fork(", "kill(", "remove(", "rmdir(", "unlink(", "chmod(", "chown(", "popen(", "walk(", "makedirs(", "mkdir(", "rmtree(", "copy(", "move(", "rename(", "socket.", "threading.", "multiprocessing."]
     for imp in banned_imports:
         if f"import {imp}" in cell_code or f"from {imp} import" in cell_code:
             return False, f"Banned import detected: {imp}"
@@ -63,7 +64,15 @@ def is_code_safe(cell_code):
     return True, ""
 
 def remove_input_lines(code_string):
-    """Removes lines containing 'input(' from a code string."""
+    """Removes lines containing input() calls from a code string."""
     lines = code_string.splitlines()
-    filtered_lines = [line for line in lines if 'input(' not in line]
+    filtered_lines = [line for line in lines if "input(" not in line]
+    return "\n".join(filtered_lines)
+
+def sanitize_student_code(code_string):
+    """Removes lines containing potentially disruptive functions like input(), quit(), or exit() from a code string."""
+    lines = code_string.splitlines()
+    # A list of substrings that, if present, will cause the line to be removed.
+    disruptive_calls = ["quit(", "exit("]
+    filtered_lines = [line for line in lines if not any(call in line for call in disruptive_calls)]
     return "\n".join(filtered_lines)
