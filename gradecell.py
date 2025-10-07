@@ -59,6 +59,13 @@ def check_test(test, test_ns, cell_output):
             # Remove leading/trailing whitespace, collapse all whitespace (including newlines) to single space
             return re.sub(r'\s+', ' ', s.strip())
 
+        # Use printed outputs if available (excludes input prompts), otherwise fall back to full cell_output
+        if hasattr(test_ns, 'printed_outputs') and test_ns.printed_outputs:
+            # Join all printed outputs with newlines to reconstruct the output stream
+            test_output = '\n'.join(test_ns.printed_outputs)
+        else:
+            test_output = cell_output
+
         case_sensitive = test.get("case_sensitive", False)
         re_flags = re.DOTALL if case_sensitive else (re.DOTALL | re.IGNORECASE)
 
@@ -73,10 +80,10 @@ def check_test(test, test_ns, cell_output):
                 if var:
                     regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+)')
             regex = regex + r'\s*$'  # Allow trailing whitespace/newline at end
-            match = re.match(regex, normalize(cell_output), flags=re_flags)
+            match = re.match(regex, normalize(test_output), flags=re_flags)
             if not match:
                 cs_hint = "(case-sensitive)" if case_sensitive else "(case-insensitive)"
-                raise AssertionError(f"Output did not match expected format.\nExpected format {cs_hint}: {fmt}\nActual: {cell_output}")
+                raise AssertionError(f"Output did not match expected format.\nExpected format {cs_hint}: {fmt}\nActual: {test_output}")
             extracted = match.groupdict()
             # Compare extracted values to expected
             for var, expected_val in expected_vars.items():
@@ -94,16 +101,16 @@ def check_test(test, test_ns, cell_output):
                     # Fallback to string comparison
                     assert str(actual_val) == str(expected_val), f"{var}: expected '{expected_val}', got '{actual_val}'"
         elif isinstance(test["expected"], list):
-            for expected, actual in zip(test["expected"], cell_output if isinstance(cell_output, list) else [cell_output]):
+            for expected, actual in zip(test["expected"], test_output if isinstance(test_output, list) else [test_output]):
                 if case_sensitive:
                     assert normalize(actual) == normalize(expected), f"test for output expected {expected}, got {actual} (case-sensitive)"
                 else:
                     assert normalize(actual).lower() == normalize(expected).lower(), f"test for output expected {expected}, got {actual} (case-insensitive)"
         else:
             if case_sensitive:
-                assert normalize(cell_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {cell_output} (case-sensitive)"
+                assert normalize(test_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {test_output} (case-sensitive)"
             else:
-                assert normalize(cell_output).lower() == normalize(test["expected"]).lower(), f"test for output expected {test['expected']}, got {cell_output} (case-insensitive)"
+                assert normalize(test_output).lower() == normalize(test["expected"]).lower(), f"test for output expected {test['expected']}, got {test_output} (case-insensitive)"
     else:
         raise ValueError("Unknown test type")
 
@@ -151,15 +158,46 @@ def grade_notebook(nb=None):
                 val = _to_complex_if_needed(val)  # Convert input variable
                 setattr(test_ns, var, val)
 
-            # --- New logic for input mocking ---
+            # --- Spy and Mock Implementation ---
+            test_ns.prompts_used = []
+            test_ns.printed_outputs = []
+            original_print = print # Keep a reference to the real print
+
+            def spy_print(*args, **kwargs):
+                """Captures print arguments and also prints to stdout."""
+                # Reconstruct the message as a single string
+                output = io.StringIO()
+                kwargs['file'] = output
+                original_print(*args, **kwargs)
+                message = output.getvalue()
+                # Remove trailing newline that print adds, to match user expectation
+                if message.endswith('\n'):
+                    message = message[:-1]
+                test_ns.printed_outputs.append(message)
+                # Also call original print to ensure it's captured by redirect_stdout
+                original_print(*args)
+
+
             input_overload_val = test.get("input_overload", None)
             if input_overload_val is not None:
-                def mock_input(prompt=""):
-                    # Mimic the real input() by printing the prompt to stdout
-                    # print(prompt, end="")
-                    return input_overload_val
-                # Inject the mock into the execution namespace
-                test_ns.input = mock_input
+                if isinstance(input_overload_val, list):
+                    inputs_iterator = iter(input_overload_val)
+                    def spy_input_from_list(prompt=""):
+                        test_ns.prompts_used.append(prompt)
+                        original_print(prompt, end="") # So it appears in cell_output
+                        try:
+                            return next(inputs_iterator)
+                        except StopIteration:
+                            return ""
+                    test_ns.input = spy_input_from_list
+                else:
+                    def spy_input_single(prompt=""):
+                        test_ns.prompts_used.append(prompt)
+                        original_print(prompt, end="") # So it appears in cell_output
+                        return input_overload_val
+                    test_ns.input = spy_input_single
+            
+            test_ns.print = spy_print
             # ------------------------------------
 
             key = f"prob{prob_idx}_test{test_idx}"
@@ -169,6 +207,19 @@ def grade_notebook(nb=None):
                 non_blank_lines = [line for line in cell_lines if line.strip() != ""]
                 # Only execute code after line_offset
                 code_to_run = "\n".join(non_blank_lines[line_offset:])
+
+                # Add prefix code if specified (test-level takes precedence over problem-level)
+                prefix_lines = []
+                if "prefix_code" in test:
+                    prefix_lines = test["prefix_code"]
+                elif "prefix_code" in problem:
+                    prefix_lines = problem["prefix_code"]
+                
+                if prefix_lines:
+                    if isinstance(prefix_lines, str):
+                        prefix_lines = [prefix_lines]  # Convert single string to list
+                    prefix_code = "\n".join(prefix_lines)
+                    code_to_run = prefix_code + "\n" + code_to_run
 
                 # If test has inputs OR we are overloading input, we shouldn't be using student's input() calls
                 # But if we are overloading, we need the line with input() to be there.
