@@ -91,7 +91,7 @@ class GradingSession:
                 results, total_score, max_score, test_results = None, None, None, None
             
             if results == "CELL_MISMATCH":
-                self.cell_mismatch_users.append(f"User: {userid}, Expected: {total_score}, Got: {max_score}")
+                self.cell_mismatch_users.append(f"User: {userid}, Expected: {test_results['expected']}, Got: {test_results['got']}")
                 continue
             
             if results is None or test_results is None:
