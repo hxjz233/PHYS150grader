@@ -1,80 +1,186 @@
-# PHYS150 Homework Grader
+# PHYS150 Grader - Modular Architecture
 
-This is a Grading system for TAMU PHYS150 developed by GPT-4.1 and Zhuowei Zhang.
+A Python-based Jupyter notebook autograder for the PHYS 150 course with modular, class-based architecture. This system reads student submissions, executes test cases defined in TOML configuration files, and generates grades and feedback.
 
-## Inputs for grading
-1. `submissions.zip` downloaded from Canvas
-2. gradebook downloaded from Canvas
-3. Tests written for the homework as `tester.toml`
+## Architecture Overview
+
+The grading system uses a modular class-based architecture organized into core modules and main application files:
+
+### Core Modules (`core/`)
+
+- **`config.py`**: `ConfigManager` - Centralized configuration management for TOML files
+- **`test_runner.py`**: `TestValidator` and `TestRunner` - Test execution and validation logic
+- **`mock_system.py`**: `IOSpy` and `MockManager` - Input/output mocking and separation
+- **`notebook_grader.py`**: `NotebookGrader` - Main grading orchestration
+
+### Main Application Files
+
+- **`gradecell.py`**: Single notebook grading interface
+- **`grader.py`**: Batch grading system using `GradingSession` class
+- **`feedback.py`**: Canvas feedback upload using `CanvasFeedbackUploader` class
+- **`manual.py`**: Manual grading and feedback generation functions
+- **`preprocess.py`**: Submission preprocessing using `SubmissionPreprocessor` class
+
+## API Usage
+
+### Single Notebook Grading
+```python
+from gradecell import grade_notebook
+import nbformat
+
+# Load notebook
+nb = nbformat.read("student_notebook.ipynb", as_version=4)
+
+# Grade the notebook
+results, total_score, max_score, test_results = grade_notebook(nb)
+```
+
+### Batch Grading
+```python
+from grader import GradingSession
+
+# Create and run grading session
+session = GradingSession()
+session.grade_all_students()
+```
+
+### Canvas Feedback Upload
+```python
+from feedback import CanvasFeedbackUploader
+
+# Upload all feedback to Canvas
+uploader = CanvasFeedbackUploader()
+uploader.upload_all_feedback()
+```
+
+### Manual Grading
+```python
+from manual import generate_manual_feedback, update_gradebook
+
+# Generate feedback from test results
+user_grades, max_score = generate_manual_feedback()
+
+# Update gradebook
+update_gradebook(user_grades, max_score)
+```
+
+### Submission Preprocessing
+```python
+from preprocess import SubmissionPreprocessor
+
+# Extract and rename submissions
+preprocessor = SubmissionPreprocessor()
+preprocessor.extract_submissions()
+preprocessor.validate_extractions()
+```
 
 ## Configuration
-The configuration takes place in two places:
 
-In `config.toml`, 
-- `homework_dir` for the folder name that you want to put the `submissions.zip` in. This will be the folder you put all grading summary and feedback info in for the current problem set. It is recommended that each problem set be graded in a different directory 
-- `submissions_dir` for the folder name "`homework_dir/submissions_dir`", into which `submissions.zip` shall preprocess (extract and rename) the homework files.
-- `feedback_dir` for the folder name "`homework_dir/feedback_dir`", into which grading details are put in (and later on submitted to student assignment comments)
-- `course_number` for the course id that appears in the canvas url
-- `homework_title` for the current assignment name, i.e. the gradebook header for the updated gradebook
-- `gradebook` for the file name of the gradebook downloaded from canvas. This allows the grading system to enumerate the student IDs and grade.
-  - It is recommended that you export from Canvas everytime before you grade, as there may constantly be student dropping the class and changing the student name list that you should grade
-- `timeout` for the timeout limit in each cell execution (in secs).
-- `debug` true for suppressing real submission of feedbacks
-- `headless` true for hiding the Chrome Explorer that automatically submits feedback
+The system uses TOML configuration files:
 
-In `tester.toml`, which contains tests for each problem set and should be placed under the corresponding `homework_dir`,
-- `next_code_cell` for the next code cell that contains student's solution. e.g. for a hw in format
-> `Markdown`
->
-> `Markdown`
->
-> `Code` (initialization of variables as indicated by problem)
->
-> `Code` (student solution)
->
-> `Markdown`
->
-> `Code` (initialization of variables as indicated by problem)
->
-> `Code` (student solution)
+### `config.toml` - Main Configuration
+- `homework_dir`: Directory for current assignment files
+- `submissions_dir`: Subdirectory for extracted student submissions
+- `feedback_dir`: Subdirectory for generated feedback files
+- `course_number`: Canvas course ID
+- `homework_title`: Assignment name for gradebook
+- `gradebook`: Path to Canvas gradebook CSV file
+- `timeout`: Cell execution timeout (seconds)
+- `debug`: Suppress actual feedback submission
+- `headless`: Run browser in headless mode
 
-You should put `next_code_cell=2` for prob 1 and `next_code_cell=2` for prob 2. The system then knows to read the 2nd and 4th `Code` block with testing variables. This way of denoting solution cell numbers in `tester.toml` enables a more flexible way to stack the problems and is expected to give extra flexibility when moving the problems around in their order/across different assignments.
-- `pts` points assigned to this problem. The student would get passed proportion of points out of all tests for that problem
-- `line_offset` for the number of ignored lines within cell when reading student solution. This is useful when the lines for the initialization of problem variables are written with student solution within the same cell. There you would want to skip reassigning variables to default nubmers and read only from the lines where the student solution is at.
-- `tests` for the tests. `type` accepts `variable` or `output` for distinguishing whether the system should look at specific variable or at the standard output. 
-  - `variables` for the testing input variables. 
-  - `expected` contains the expected result.
-  - If `tol` exists, a tolerance is allowed for the comparison of result variables / extracted variable from output strings
-  - Specifically for the `output` type:
-    - Case sensitivity is by default `false`. This can be turned on for a particular test with `case_sensitivity=true`. It applies to both simple output test and formatted output matches.
-    - If `format` exists, the output string will be matched according to the `format` in the syntax `...{res}...`, and extract `res` and make further comparisons according to its value in `expected` (and `tol` if specified). There can be more than one variables for examination.
+### `tester.toml` - Test Definitions
+- `next_code_cell`: Index of student solution cell
+- `pts`: Points assigned to problem
+- `line_offset`: Lines to skip in solution cell
+- `tests`: Array of test definitions
+  - `type`: "variable" or "output"
+  - `variables`: Input variables for test
+  - `expected`: Expected result
+  - `tol`: Tolerance for numeric comparisons
+  - `format`: Output format pattern (for output tests)
+  - `case_sensitivity`: Case-sensitive matching
 
-## To use:
-1. export gradebook from Canvas and placed it at the root of this grading system
-2. get `submissions.zip` for the batch of student homework and place it under the `homework_dir` you configured.
-3. run `preprocess.py` and expect the homework files be extracted and renamed into `homework_dir/submissions_dir`
-4. run `grader.py` and expect
-    1. feedback in `homework_dir/feedback_dir` which contains grading details for each students
-    2. `grading_summary.txt` which contains problem numbers, avg. acc., and info about exceptions thrown for student codes.
-    3. `wa.txt` which records wrong answers by the students.
-    4. the creation of `grade_updated.csv` at the root, which contains a column according to `homework_title`. Submit it to the Canvas gradebook and Canvas will hold the merging of the grades.
-5. After examining your grading outcomes, run `feedback.py` and login with duo. 
+## Workflow
 
-## All outputs, to sum up
-1. updated gradebook
-2. grading summary and wrong answers of the current assignment
-3. feedback folder for grading details, and should be received as comments of the corresponding homework in the student's view
+1. **Setup**: Export gradebook from Canvas, place submissions.zip in homework directory
+2. **Preprocess**: Run `python preprocess.py` to extract submissions
+3. **Grade**: Run `python grader.py` to grade all students
+4. **Review**: Examine results in feedback directory and grading summary
+5. **Upload**: Run `python feedback.py` to upload feedback to Canvas
 
-## Misc
-`safecode.py` is designed to primitively protects the grader from OS operations and deadloop attacks from students when `grader.py` is running. 
-However, the behavior differs depending on the OS the code is operated in. 
-The grading code can be run on both windows and unix,
-but running in Windows will not have timeout limits activated and therefore makes the grader unprotected from deadloops.
-If a deadloop occurs in a students code, you will have to exclude it manually.
-Running in unix environment allows a cell to run up to `timeout` secs.
+## Key Features
 
-If a file is corrupted, it will be marked as `Unreadable Notebooks` in the grading summary and no feedback will be given
+### Safety and Security
+- Code execution timeout protection
+- Safety checking for dangerous operations
+- Input/output separation and mocking
+- Comprehensive error handling
 
-## TODO
-- allow manual operation for grading
-- approximated output
+### Test Types
+- **Variable Tests**: Compare student variables with expected values
+- **Output Tests**: Match printed output against patterns
+- **Tolerance Support**: Numeric comparisons with configurable tolerance
+- **Complex Number Support**: Automatic complex number handling
+
+### Error Handling
+- Safety violations (unsafe code patterns)
+- Timeout violations (infinite loops)
+- Execution errors (runtime exceptions)
+- Cell count mismatches
+- Unreadable notebooks
+
+### Reporting
+- Individual student feedback files
+- Grading summary with statistics
+- Wrong answer compilation
+- Updated gradebook for Canvas import
+
+## Class Hierarchy
+
+```
+ConfigManager
+├── Loads and manages TOML configuration
+└── Provides path resolution and settings access
+
+TestValidator & TestRunner
+├── Validates variable tests (tolerance, complex numbers)
+├── Validates output tests (format matching, content)
+└── Executes tests with safety checks and timeouts
+
+IOSpy & MockManager
+├── Creates spy functions for input/output separation
+└── Manages mock environments for safe code execution
+
+NotebookGrader
+├── Orchestrates the grading process
+├── Uses TestRunner for individual tests
+└── Aggregates results and handles scoring
+
+GradingSession
+├── Manages batch grading for multiple students
+├── Uses NotebookGrader for individual notebooks
+└── Generates reports and updates gradebooks
+
+CanvasFeedbackUploader
+├── Handles Canvas authentication and navigation
+├── Uploads feedback files to student assignments
+└── Supports debug mode and headless operation
+
+SubmissionPreprocessor
+├── Extracts student submissions from zip files
+├── Handles Canvas filename formats (including LATE submissions)
+└── Validates extracted files
+```
+
+## Environment Requirements
+
+- Python 3.7+
+- nbformat: Jupyter notebook processing
+- toml: Configuration file parsing
+- selenium: Web automation for Canvas
+- Chrome browser: For Canvas interaction
+
+## Development Notes
+
+The system maintains backward compatibility while providing a clean, modular architecture for easy maintenance and extension. Each class has a single responsibility and clear interfaces, making it easy to add new features or modify existing behavior.

@@ -1,295 +1,39 @@
-import nbformat
-import toml
-import sys
+"""
+Refactored gradecell.py - Main interface for notebook grading.
+This file maintains backward compatibility while using the new class-based system.
+"""
 import os
-import io
-from contextlib import redirect_stdout
-from types import SimpleNamespace
-import platform
+import sys
 
-# Import run_cell and is_code_safe depending on OS
-if platform.system() == "Linux" or platform.system() == "Darwin":
-    from safecode_unix import run_cell
-else:
-    from safecode import run_cell
-from safecode import is_code_safe, remove_input_lines, sanitize_student_code
+# Add the core module to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'core'))
 
-# Load tester.toml from homework directory if specified
-def get_tester_toml():
-    config_path = os.path.join(os.path.dirname(__file__), "config.toml")
-    if os.path.exists(config_path):
-        config = toml.load(config_path)
-        homework_dir = config.get("homework_dir", None)
-        if homework_dir:
-            tester_path = os.path.join(homework_dir, "tester.toml")
-            if os.path.exists(tester_path):
-                return toml.load(tester_path)
-    # fallback to local
-    return toml.load("tester.toml")
+from core.config import ConfigManager
+from core.notebook_grader import NotebookGrader
 
-tester = get_tester_toml()
+# Global instances for backward compatibility
+_config_manager = ConfigManager()
+_notebook_grader = NotebookGrader(_config_manager)
 
+# Expose the tester configuration for backward compatibility
+tester = _config_manager.tester
+
+# Main functions for backward compatibility
 def _to_complex_if_needed(val):
     """Converts a dict with 'real' and 'imag' keys to a complex number."""
-    if isinstance(val, dict) and 'real' in val and 'imag' in val:
-        return complex(val['real'], val['imag'])
-    return val
+    return _notebook_grader.validator._convert_complex_if_needed(val)
 
 def check_test(test, test_ns, cell_output):
-    if test["type"] == "variable":
-        tol = test.get("tol", None)
-        for var, expected in test["expected"].items():
-            expected = _to_complex_if_needed(expected)  # Convert expected value
-            actual = test_ns.__dict__.get(var, None)
-            if tol is not None:
-                # Try to compare as floats/complex with tolerance
-                try:
-                    if isinstance(actual, (int, float, complex)) and isinstance(expected, (int, float, complex)):
-                        assert abs(actual - expected) <= tol, f"test for {var} expected {expected} (tol={tol}), got {actual}"
-                    else:
-                        raise AssertionError(f"test for {var} expected {expected}, got {actual} (non-numeric, cannot use tol)")
-                except Exception as e:
-                    raise AssertionError(str(e))
-            else:
-                assert actual == expected, f"test for {var} expected {expected}, got {actual}"
-    elif test["type"] == "output":
-        import re
-        from string import Formatter
-        def normalize(s):
-            # Remove leading/trailing whitespace, collapse all whitespace (including newlines) to single space
-            return re.sub(r'\s+', ' ', s.strip())
-
-        # Use printed outputs if available (excludes input prompts), otherwise fall back to full cell_output
-        if hasattr(test_ns, 'printed_outputs') and test_ns.printed_outputs:
-            # Join all printed outputs with newlines to reconstruct the output stream
-            test_output = '\n'.join(test_ns.printed_outputs)
-        else:
-            test_output = cell_output
-
-        case_sensitive = test.get("case_sensitive", False)
-        re_flags = re.DOTALL if case_sensitive else (re.DOTALL | re.IGNORECASE)
-
-        if "format" in test:
-            fmt = test["format"]
-            expected_vars = test.get("expected", {})
-            tol = test.get("tol", None)
-            # Build regex from format string
-            regex = re.escape(fmt)
-            # Replace {var} with regex group
-            for _, var, _, _ in Formatter().parse(fmt):
-                if var:
-                    regex = regex.replace(r'\{' + var + r'\}', r'(?P<' + var + r'>.+)')
-            regex = regex + r'\s*$'  # Allow trailing whitespace/newline at end
-            match = re.match(regex, normalize(test_output), flags=re_flags)
-            if not match:
-                cs_hint = "(case-sensitive)" if case_sensitive else "(case-insensitive)"
-                raise AssertionError(f"Output did not match expected format.\nExpected format {cs_hint}: {fmt}\nActual: {test_output}")
-            extracted = match.groupdict()
-            # Compare extracted values to expected
-            for var, expected_val in expected_vars.items():
-                actual_val = extracted.get(var, None)
-                assert actual_val is not None, f"Variable {var} not found in output."
-                # Try to compare as float if both are numeric
-                try:
-                    expected_num = float(expected_val)
-                    actual_num = float(actual_val)
-                    if tol is not None:
-                        assert abs(actual_num - expected_num) <= tol, f"{var}: expected {expected_num} (tol={tol}), got {actual_num}"
-                    else:
-                        assert actual_num == expected_num, f"{var}: expected {expected_num}, got {actual_num}"
-                except Exception:
-                    # Fallback to string comparison
-                    assert str(actual_val) == str(expected_val), f"{var}: expected '{expected_val}', got '{actual_val}'"
-        elif isinstance(test["expected"], list):
-            for expected, actual in zip(test["expected"], test_output if isinstance(test_output, list) else [test_output]):
-                if case_sensitive:
-                    assert normalize(actual) == normalize(expected), f"test for output expected {expected}, got {actual} (case-sensitive)"
-                else:
-                    assert normalize(actual).lower() == normalize(expected).lower(), f"test for output expected {expected}, got {actual} (case-insensitive)"
-        else:
-            if case_sensitive:
-                assert normalize(test_output) == normalize(test["expected"]), f"test for output expected {test['expected']}, got {test_output} (case-sensitive)"
-            else:
-                assert normalize(test_output).lower() == normalize(test["expected"]).lower(), f"test for output expected {test['expected']}, got {test_output} (case-insensitive)"
-    else:
-        raise ValueError("Unknown test type")
+    """Check a test result - backward compatibility wrapper."""
+    return _notebook_grader.test_runner.run_test(test, test_ns, cell_output)
 
 def get_code_cell_by_accumulated_index(nb, target_index):
-    count = 0
-    for cell in nb.cells:
-        if cell.cell_type == "code":
-            count += 1
-            if count == target_index:
-                return cell
-    raise IndexError(f"Code cell number {target_index} not found.")
+    """Get a code cell by accumulated index - backward compatibility wrapper."""
+    return _notebook_grader._get_code_cell_by_index(nb, target_index)
 
 def grade_notebook(nb=None):
-    if nb is None:
-        # This case is for when grade_notebook is called to get max_score without a notebook
-        max_score = sum(p.get("pts", 1) for p in tester["problem"])
-        return None, None, max_score, None
-
-    # --- Cell count check ---
-    expected_code_cells = sum(p.get('next_code_cell', 0) for p in tester['problem'])
-    actual_code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
-    if actual_code_cells != expected_code_cells:
-        test_results = {"expected": expected_code_cells, "got": actual_code_cells}
-        return "CELL_MISMATCH", None, None, test_results
-
-    results = []
-    total_score = 0
-    max_score = 0
-    current_code_cell_index = 0
-    test_results = {}  # key: prob#_test#, value: (1/0, failmsg)
-    for prob_idx, problem in enumerate(tester["problem"], 1):
-        current_code_cell_index += problem["next_code_cell"]
-        pts = problem.get("pts", 1)
-        tests = problem["tests"]
-        line_offset = problem.get("line_offset", 0)
-        cell = get_code_cell_by_accumulated_index(nb, current_code_cell_index)
-        passed = 0
-        failed_tests = []
-        safety_violation_count = 0
-        timeout_violation_count = 0
-        for test_idx, test in enumerate(tests, 1):
-            test_ns = SimpleNamespace()
-            test_inputs = test.get("variables", {})
-            for var, val in test_inputs.items():
-                val = _to_complex_if_needed(val)  # Convert input variable
-                setattr(test_ns, var, val)
-
-            # --- Spy and Mock Implementation ---
-            test_ns.prompts_used = []
-            test_ns.printed_outputs = []
-            original_print = print # Keep a reference to the real print
-
-            def spy_print(*args, **kwargs):
-                """Captures print arguments and also prints to stdout."""
-                # Reconstruct the message as a single string
-                output = io.StringIO()
-                kwargs['file'] = output
-                original_print(*args, **kwargs)
-                message = output.getvalue()
-                # Remove trailing newline that print adds, to match user expectation
-                if message.endswith('\n'):
-                    message = message[:-1]
-                test_ns.printed_outputs.append(message)
-                # Also call original print to ensure it's captured by redirect_stdout
-                original_print(*args)
-
-
-            input_overload_val = test.get("input_overload", None)
-            if input_overload_val is not None:
-                if isinstance(input_overload_val, list):
-                    inputs_iterator = iter(input_overload_val)
-                    def spy_input_from_list(prompt=""):
-                        test_ns.prompts_used.append(prompt)
-                        original_print(prompt, end="") # So it appears in cell_output
-                        try:
-                            return next(inputs_iterator)
-                        except StopIteration:
-                            return ""
-                    test_ns.input = spy_input_from_list
-                else:
-                    def spy_input_single(prompt=""):
-                        test_ns.prompts_used.append(prompt)
-                        original_print(prompt, end="") # So it appears in cell_output
-                        return input_overload_val
-                    test_ns.input = spy_input_single
-            
-            test_ns.print = spy_print
-            # ------------------------------------
-
-            key = f"prob{prob_idx}_test{test_idx}"
-            if cell.cell_type == "code":
-                # Remove all blank lines first
-                cell_lines = cell.source.splitlines() if isinstance(cell.source, str) else cell.source
-                non_blank_lines = [line for line in cell_lines if line.strip() != ""]
-                # Only execute code after line_offset
-                code_to_run = "\n".join(non_blank_lines[line_offset:])
-
-                # Add prefix code if specified (test-level takes precedence over problem-level)
-                prefix_lines = []
-                if "prefix_code" in test:
-                    prefix_lines = test["prefix_code"]
-                elif "prefix_code" in problem:
-                    prefix_lines = problem["prefix_code"]
-                
-                if prefix_lines:
-                    if isinstance(prefix_lines, str):
-                        prefix_lines = [prefix_lines]  # Convert single string to list
-                    prefix_code = "\n".join(prefix_lines)
-                    code_to_run = prefix_code + "\n" + code_to_run
-
-                # If test has inputs OR we are overloading input, we shouldn't be using student's input() calls
-                # But if we are overloading, we need the line with input() to be there.
-                if test_inputs and input_overload_val is None:
-                    code_to_run = remove_input_lines(code_to_run)
-
-                # Sanitize student code to remove disruptive calls
-                code_to_run = sanitize_student_code(code_to_run)
-
-                # Check code safety before running
-                safe, reason = is_code_safe(code_to_run)
-
-                # --- Build input_str with proper complex formatting ---
-                formatted_inputs = []
-                for k, v in test_inputs.items():
-                    converted_v = _to_complex_if_needed(v)
-                    formatted_inputs.append(f'{k}={converted_v}')
-                input_str = ', '.join(formatted_inputs)
-                # ----------------------------------------------------
-
-                if input_overload_val is not None:
-                    if input_str:
-                        input_str += f", all inputs be {repr(input_overload_val)}"
-                    else:
-                        input_str = f"all inputs be {repr(input_overload_val)}"
-
-                if not safe:
-                    failed_tests.append(f"Test {test_idx} blocked on input ({input_str}): {reason}")
-                    safety_violation_count += 1
-                    test_results[key] = (0, f"Blocked: {reason}")
-                    continue
-                f = io.StringIO()
-                try:
-                    with redirect_stdout(f):
-                        cell_result = run_cell(code_to_run, test_ns)
-                    if cell_result == "__DEADLOOP__":
-                        failed_tests.append(f"Test {test_idx} timeout on input ({input_str})")
-                        timeout_violation_count += 1
-                        test_results[key] = (0, "Timeout")
-                        continue
-                    cell_output = f.getvalue()
-                except Exception as exec_err:
-                    err_type = type(exec_err).__name__
-                    failmsg = f"Test {test_idx} error ({err_type}) on input ({input_str}): {exec_err}"
-                    failed_tests.append(failmsg)
-                    test_results[key] = (0, failmsg)
-                    continue
-                try:
-                    check_test(test, test_ns, cell_output)
-                    passed += 1
-                    test_results[key] = (1, "")
-                except AssertionError as e:
-                    failmsg = f"Test {test_idx} failed on input ({input_str}): {e}"
-                    failed_tests.append(failmsg)
-                    test_results[key] = (0, failmsg)
-        percent = passed / len(tests) if tests else 0
-        score = percent * pts
-        total_score += score
-        max_score += pts
-        results.append({
-            "cell_index": current_code_cell_index,
-            "passed": passed,
-            "total": len(tests),
-            "score": score,
-            "pts": pts,
-            "failed_tests": failed_tests,
-            "safety_violations": safety_violation_count,
-            "timeout_violations": timeout_violation_count
-        })
-    return results, total_score, max_score, test_results
+    """Grade a notebook - main entry point."""
+    return _notebook_grader.grade_notebook(nb)
 
 if __name__ == "__main__":
     print("This module is intended to be imported and used by grader.py.")
