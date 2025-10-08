@@ -90,8 +90,17 @@ class GradingSession:
                 print(f"Error grading notebook for user {userid}: {e}")
                 results, total_score, max_score, test_results = None, None, None, None
             
-            if results == "CELL_MISMATCH":
-                self.cell_mismatch_users.append(f"User: {userid}, Expected: {test_results['expected']}, Got: {test_results['got']}")
+            # Check if this is a cell mismatch case
+            is_cell_mismatch = (isinstance(results, list) and len(results) > 0 and 
+                               results[0].get('cell_mismatch', False))
+            
+            if is_cell_mismatch:
+                # Extract cell mismatch details
+                expected = results[0].get('expected_cells', 'Unknown')
+                got = results[0].get('actual_cells', 'Unknown')
+                self.cell_mismatch_users.append(f"User: {userid}, Expected: {expected}, Got: {got}")
+                # Still write feedback for cell mismatch (this is the key improvement!)
+                self._write_student_feedback(userid, results, total_score, max_score)
                 continue
             
             if results is None or test_results is None:
@@ -130,22 +139,30 @@ class GradingSession:
         
         with open(txt_path, "w", encoding="utf-8") as f:
             for res in results:
-                f.write(f"Cell {res['cell_index']}: {res['passed']}/{res['total']} tests passed, "
-                       f"Score: {res['score']:.2f}/{res['pts']}\n")
-                
-                if res['failed_tests']:
-                    f.write("  Failed tests:\n")
-                    for fail_msg in res['failed_tests']:
-                        f.write(f"    {fail_msg}\n")
-                
-                if res.get('safety_violations', 0) > 0:
-                    f.write(f"  Safety violations: {res['safety_violations']}\n")
-                
-                if res.get('timeout_violations', 0) > 0:
-                    f.write(f"  Timeout violations: {res['timeout_violations']}\n")
+                # Handle cell mismatch case with special formatting
+                if res.get('cell_mismatch', False):
+                    f.write("NOTEBOOK STRUCTURE ERROR:\n")
+                    f.write(f"Expected {res['expected_cells']} code cells, but found {res['actual_cells']}\n")
+                    f.write("Please check that your notebook has the correct number of code cells.\n")
+                    f.write("Each problem should have its own code cell as specified in the assignment.\n\n")
+                else:
+                    # Normal test result formatting
+                    f.write(f"Cell {res['cell_index']}: {res['passed']}/{res['total']} tests passed, "
+                           f"Score: {res['score']:.2f}/{res['pts']}\n")
+                    
+                    if res['failed_tests']:
+                        f.write("  Failed tests:\n")
+                        for fail_msg in res['failed_tests']:
+                            f.write(f"    {fail_msg}\n")
+                    
+                    if res.get('safety_violations', 0) > 0:
+                        f.write(f"  Safety violations: {res['safety_violations']}\n")
+                    
+                    if res.get('timeout_violations', 0) > 0:
+                        f.write(f"  Timeout violations: {res['timeout_violations']}\n")
             
             if total_score is None or max_score is None:
-                f.write("Total Score: Time limit exceeded or error\n")
+                f.write("Total Score: Time limit exceeded or format error\n")
             else:
                 f.write(f"Total Score: {total_score:.2f}/{max_score}\n")
     
@@ -173,6 +190,10 @@ class GradingSession:
         import re
         
         for i, res in enumerate(results):
+            # Skip cell mismatch cases as they don't fit normal problem statistics
+            if res.get('cell_mismatch', False):
+                continue
+                
             percent = res['passed'] / res['total'] if res['total'] else 0
             self.summary_scores[i].append(percent)
             self.safety_violations[i] += res.get('safety_violations', 0)

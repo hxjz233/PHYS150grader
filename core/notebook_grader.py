@@ -54,8 +54,21 @@ class NotebookGrader:
         actual_code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
         
         if actual_code_cells != expected_code_cells:
-            test_results = {"expected": expected_code_cells, "got": actual_code_cells}
-            return "CELL_MISMATCH", None, None, test_results
+            # Return a special results structure instead of "CELL_MISMATCH" string
+            cell_mismatch_result = [{
+                'cell_index': 'ALL',
+                'passed': 0,
+                'total': 1,
+                'score': 0.0,
+                'pts': 0.0,
+                'failed_tests': [f"Cell count mismatch: Expected {expected_code_cells} code cells, but found {actual_code_cells}"],
+                'safety_violations': 0,
+                'timeout_violations': 0,
+                'cell_mismatch': True,
+                'expected_cells': expected_code_cells,
+                'actual_cells': actual_code_cells
+            }]
+            return cell_mismatch_result, None, None, None
         
         return None
     
