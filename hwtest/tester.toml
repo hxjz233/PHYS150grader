@@ -14,3 +14,11 @@ tests = [
     { type = "output", case_sensitive = true, variables = { v = 0, t = 2 }, format = "The number is {num}. The other number is {other}.", expected = { num = 1, other = 2 }, tol = 0.5 },
     { type = "output", variables = { v = 0, t = 2 }, format = "The number is {num}. The other number is {other}.", expected = { num = 1, other = 2 }, tol = 0.5 },
 ]
+
+[[problem]]
+next_code_cell = 1
+pts = 1
+line_offset = 0
+tests = [
+    { type = "variable", variables = { v = 0, t = 3 }, expected = { arr = [1, 2, 3, 4, 5] } }
+]

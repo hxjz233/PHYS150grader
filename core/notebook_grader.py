@@ -205,6 +205,9 @@ class NotebookGrader:
         test_inputs = test.get("variables", {})
         for var, val in test_inputs.items():
             val = self.validator._convert_complex_if_needed(val)
+            # Create a new list if the value is a list to prevent modifying the original
+            if isinstance(val, list):
+                val = val.copy()
             setattr(test_ns, var, val)
         
         return test_ns

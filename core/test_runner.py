@@ -10,10 +10,26 @@ from types import SimpleNamespace
 class TestValidator:
     """Handles validation of test results against expected outcomes."""
     
+    def __init__(self):
+        """Initialize validator with storage for tracking list ids."""
+        self.initial_ids = {}  # Store initial ids of variables
+    
     @staticmethod
     def normalize_whitespace(text: str) -> str:
         """Remove leading/trailing whitespace, collapse all whitespace to single space."""
         return re.sub(r'\s+', ' ', text.strip())
+        
+    def store_initial_ids(self, test: Dict[str, Any], test_ns: SimpleNamespace) -> None:
+        """Store initial ids of input variables that need id tracking."""
+        if "variables" in test and "track_list_ids" in test:
+            # track_list_ids can be either a single string or a list of strings
+            track_vars = test["track_list_ids"]
+            if isinstance(track_vars, str):
+                track_vars = [track_vars]
+                
+            for var in track_vars:
+                if var in test["variables"] and isinstance(test["variables"][var], list):
+                    self.initial_ids[var] = id(getattr(test_ns, var))
     
     def validate_variable_test(self, test: Dict[str, Any], test_ns: SimpleNamespace) -> None:
         """Validate a variable-type test."""
@@ -21,6 +37,15 @@ class TestValidator:
         for var, expected in test["expected"].items():
             expected = self._convert_complex_if_needed(expected)
             actual = getattr(test_ns, var, None)
+            
+            # Check if id should be tracked and validate it hasn't changed
+            if var in self.initial_ids:
+                current_id = id(actual)
+                if current_id != self.initial_ids[var]:
+                    raise AssertionError(
+                        f"List {var} was reassigned (id changed from {self.initial_ids[var]} to {current_id}). "
+                        "Modify the list in-place instead of creating a new one."
+                    )
             
             if tol is not None:
                 self._validate_with_tolerance(var, expected, actual, tol)
@@ -158,6 +183,8 @@ class TestRunner:
         test_type = test.get("type", "unknown")
         
         if test_type == "variable":
+            # Store initial list ids before validation if needed
+            self.validator.store_initial_ids(test, test_ns)
             self.validator.validate_variable_test(test, test_ns)
         elif test_type == "output":
             self.validator.validate_output_test(test, test_ns, cell_output)
