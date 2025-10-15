@@ -51,10 +51,20 @@ class NotebookGrader:
     def _validate_cell_count(self, nb: nbformat.NotebookNode) -> Optional[Tuple]:
         """Validate that the notebook has the expected number of code cells."""
         expected_code_cells = sum(p.get('next_code_cell', 0) for p in self.config.tester['problem'])
+        
+        # First count all code cells
         actual_code_cells = sum(1 for cell in nb.cells if cell.cell_type == 'code')
         
         if actual_code_cells != expected_code_cells:
-            # Return a special results structure instead of "CELL_MISMATCH" string
+            # Check if there's an empty cell at the end that we can ignore
+            non_empty_code_cells = sum(1 for cell in nb.cells 
+                                     if cell.cell_type == 'code' and cell.source.strip())
+            
+            # If we have the right number of non-empty code cells, proceed with grading
+            if non_empty_code_cells == expected_code_cells:
+                return None
+                
+            # Otherwise return the cell mismatch error
             cell_mismatch_result = [{
                 'cell_index': 'ALL',
                 'passed': 0,
@@ -290,10 +300,10 @@ class NotebookGrader:
         return f.getvalue()
     
     def _get_code_cell_by_index(self, nb: nbformat.NotebookNode, target_index: int) -> nbformat.NotebookNode:
-        """Get a code cell by its accumulated index."""
+        """Get a code cell by its accumulated index, skipping empty cells."""
         count = 0
         for cell in nb.cells:
-            if cell.cell_type == "code":
+            if cell.cell_type == "code" and cell.source.strip():
                 count += 1
                 if count == target_index:
                     return cell
