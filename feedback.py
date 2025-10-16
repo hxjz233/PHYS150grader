@@ -134,9 +134,11 @@ class CanvasFeedbackUploader:
         editor_body = driver.find_element(By.CSS_SELECTOR, "body.mce-content-body[contenteditable='true']")
         driver.execute_script("arguments[0].focus();", editor_body)
         
-        # Send feedback text, preserving formatting
+        # Send feedback text, preserving formatting and handling tabs
         for line in feedback_text.splitlines():
-            editor_body.send_keys(line)
+            # Replace tabs with spaces to prevent focus issues
+            safe_line = line.replace('\t', '    ')
+            editor_body.send_keys(safe_line)
             editor_body.send_keys("\n")
         
         # Switch back to main content
