@@ -44,11 +44,20 @@ else:
 #     if isinstance(result, dict):
 #         test_ns.__dict__.update(result)
 
+# Import matplotlib handling utilities
+from plt_utils import configure_matplotlib_if_needed, cleanup_matplotlib
+
 def run_cell(cell_code, test_ns):
+    # Configure matplotlib if needed
+    configure_matplotlib_if_needed(cell_code, test_ns.__dict__)
+    
     try:
         exec(cell_code, test_ns.__dict__)
     except Exception as e:
+        cleanup_matplotlib(test_ns.__dict__)  # Clean up on error
         raise e
+    finally:
+        cleanup_matplotlib(test_ns.__dict__)  # Always clean up
     return None
 
 def is_code_safe(cell_code):

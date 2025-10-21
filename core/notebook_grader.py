@@ -248,19 +248,32 @@ class NotebookGrader:
     
     def _add_prefix_code(self, code_to_run: str, test: Dict[str, Any], 
                         problem: Dict[str, Any]) -> str:
-        """Add prefix code if specified in test or problem configuration."""
-        prefix_lines = []
+        """Add prefix code if specified in test or problem configuration.
         
-        # Test-level prefix takes precedence over problem-level
+        Problem-level prefix code is applied first, followed by test-level prefix code
+        if it exists. This allows test-specific code to override problem-level settings
+        if needed.
+        """
+        all_prefix_lines = []
+        
+        # Add problem-level prefix code first
+        if "prefix_code" in problem:
+            prob_prefix = problem["prefix_code"]
+            if isinstance(prob_prefix, str):
+                all_prefix_lines.append(prob_prefix)
+            else:
+                all_prefix_lines.extend(prob_prefix)
+        
+        # Add test-level prefix code second (can override problem-level settings)
         if "prefix_code" in test:
-            prefix_lines = test["prefix_code"]
-        elif "prefix_code" in problem:
-            prefix_lines = problem["prefix_code"]
+            test_prefix = test["prefix_code"]
+            if isinstance(test_prefix, str):
+                all_prefix_lines.append(test_prefix)
+            else:
+                all_prefix_lines.extend(test_prefix)
         
-        if prefix_lines:
-            if isinstance(prefix_lines, str):
-                prefix_lines = [prefix_lines]
-            prefix_code = "\n".join(prefix_lines)
+        if all_prefix_lines:
+            prefix_code = "\n".join(all_prefix_lines)
             code_to_run = prefix_code + "\n" + code_to_run
         
         return code_to_run
