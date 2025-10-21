@@ -158,8 +158,13 @@ class CanvasFeedbackUploader:
         
         WebDriverWait(driver, 1)
     
-    def upload_all_feedback(self) -> None:
-        """Upload feedback for all students."""
+    def upload_all_feedback(self, start_id: str = None) -> None:
+        """Upload feedback for all students.
+        
+        Args:
+            start_id: Optional student ID to start from. If provided, only uploads
+                     feedback for students with IDs >= start_id.
+        """
         driver = self._setup_driver()
         
         try:
@@ -169,6 +174,22 @@ class CanvasFeedbackUploader:
             if not feedback_files:
                 print(f"No .txt files found in {self.feedback_dir}")
                 return
+                
+            # If start_id is provided, find where to start in the sorted list
+            if start_id:
+                # Find the index where we should start
+                start_index = 0
+                for i, fname in enumerate(feedback_files):
+                    current_id = os.path.splitext(fname)[0]
+                    if current_id >= start_id:
+                        start_index = i
+                        break
+                feedback_files = feedback_files[start_index:]
+                if not feedback_files:
+                    print(f"No feedback files found with ID >= {start_id}")
+                    return
+                    
+                print(f"Starting uploads from student ID: {os.path.splitext(feedback_files[0])[0]}")
             
             # Login with first student
             first_file = feedback_files[0]
@@ -202,8 +223,14 @@ class CanvasFeedbackUploader:
 
 def main():
     """Main entry point for feedback upload."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Upload feedback to Canvas")
+    parser.add_argument("--start-id", type=str, help="Start uploading from this student ID")
+    args = parser.parse_args()
+    
     uploader = CanvasFeedbackUploader()
-    uploader.upload_all_feedback()
+    uploader.upload_all_feedback(start_id=args.start_id)
 
 
 if __name__ == "__main__":
